@@ -1,0 +1,473 @@
+rules:
+  # =============================================================================
+  # REQUESTS LIBRARY - Direct URL from user input
+  # =============================================================================
+  - id: ssrf-requests-direct-url
+    languages: [python]
+    severity: ERROR
+    message: >
+      User-controlled input is passed directly as a URL to `requests.$METHOD()`.
+      An attacker can manipulate this to make the server send requests to internal
+      services (e.g., cloud metadata endpoints, internal APIs). Validate and
+      allowlist the target URL or hostname before making the request.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      owasp:
+        - A10:2021 - Server-Side Request Forgery
+      confidence: HIGH
+      impact: HIGH
+      references:
+        - https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/
+        - https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html
+    patterns:
+      - pattern-either:
+          - pattern: requests.$METHOD($URL, ...)
+          - pattern: requests.request($VERB, $URL, ...)
+      - metavariable-pattern:
+          metavariable: $METHOD
+          pattern-either:
+            - pattern: get
+            - pattern: post
+            - pattern: put
+            - pattern: patch
+            - pattern: delete
+            - pattern: head
+            - pattern: options
+      - pattern-either:
+          # Flask
+          - pattern-inside: |
+              @$APP.route(...)
+              def $FUNC(..., $URL, ...):
+                  ...
+          - pattern-inside: |
+              def $FUNC($URL = request.$ATTR[...], ...):
+                  ...
+          - pattern-inside: |
+              $URL = request.args.get(...)
+              ...
+          - pattern-inside: |
+              $URL = request.args[...]
+              ...
+          - pattern-inside: |
+              $URL = request.form.get(...)
+              ...
+          - pattern-inside: |
+              $URL = request.form[...]
+              ...
+          - pattern-inside: |
+              $URL = request.json.get(...)
+              ...
+          - pattern-inside: |
+              $URL = request.json[...]
+              ...
+          - pattern-inside: |
+              $URL = request.values.get(...)
+              ...
+          - pattern-inside: |
+              $URL = request.data
+              ...
+          # Django
+          - pattern-inside: |
+              def $FUNC($REQ, ...):
+                  ...
+                  $URL = $REQ.GET.get(...)
+                  ...
+          - pattern-inside: |
+              def $FUNC($REQ, ...):
+                  ...
+                  $URL = $REQ.GET[...]
+                  ...
+          - pattern-inside: |
+              def $FUNC($REQ, ...):
+                  ...
+                  $URL = $REQ.POST.get(...)
+                  ...
+          - pattern-inside: |
+              def $FUNC($REQ, ...):
+                  ...
+                  $URL = $REQ.POST[...]
+                  ...
+          - pattern-inside: |
+              def $FUNC($REQ, ...):
+                  ...
+                  $URL = $REQ.data.get(...)
+                  ...
+          # FastAPI / path params
+          - pattern-inside: |
+              @$APP.$DECORATOR(...)
+              def $FUNC(..., $URL: str, ...):
+                  ...
+          - pattern-inside: |
+              @$APP.$DECORATOR(...)
+              async def $FUNC(..., $URL: str, ...):
+                  ...
+
+  # =============================================================================
+  # REQUESTS LIBRARY - URL constructed via string formatting
+  # =============================================================================
+  - id: ssrf-requests-format-string
+    languages: [python]
+    severity: ERROR
+    message: >
+      A URL constructed from user input via string formatting is passed to
+      `requests.$METHOD()`. This is vulnerable to SSRF. Validate the user-supplied
+      component against an allowlist before constructing the URL.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      owasp:
+        - A10:2021 - Server-Side Request Forgery
+      confidence: HIGH
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: requests.$METHOD(f"...{$VAR}...", ...)
+          - pattern: requests.$METHOD("...{}...".format($VAR, ...), ...)
+          - pattern: requests.$METHOD("..." + $VAR + "...", ...)
+          - pattern: requests.$METHOD("..." + $VAR, ...)
+          - pattern: requests.$METHOD($VAR + "...", ...)
+          - pattern: requests.$METHOD("...%s..." % $VAR, ...)
+          - pattern: requests.$METHOD("...%s..." % (..., $VAR, ...), ...)
+      - pattern-not-inside: |
+          $ALLOWLIST = [...]
+          ...
+          if $VAR in $ALLOWLIST:
+              ...
+      - pattern-not-inside: |
+          $ALLOWLIST = {...}
+          ...
+          if $VAR in $ALLOWLIST:
+              ...
+
+  # =============================================================================
+  # URLLIB / URLLIB3 - Direct user input
+  # =============================================================================
+  - id: ssrf-urllib-direct
+    languages: [python]
+    severity: ERROR
+    message: >
+      User-controlled input is passed to `urllib.request.urlopen()` or
+      `urllib3` pool methods. This can lead to SSRF. Validate the URL
+      against an allowlist before making the request.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: HIGH
+      impact: HIGH
+    pattern-either:
+      - pattern: urllib.request.urlopen($URL, ...)
+      - pattern: urllib.request.Request($URL, ...)
+      - pattern: urllib.request.urlretrieve($URL, ...)
+      - pattern: urllib3.request($METHOD, $URL, ...)
+      - pattern: $POOL.request($METHOD, $URL, ...)
+      - pattern: $POOL.urlopen($METHOD, $URL, ...)
+
+  # =============================================================================
+  # HTTPX (async and sync)
+  # =============================================================================
+  - id: ssrf-httpx
+    languages: [python]
+    severity: ERROR
+    message: >
+      User-controlled input is passed as a URL to `httpx`. An attacker may
+      exploit this to reach internal services. Validate and allowlist the URL.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: HIGH
+      impact: HIGH
+    pattern-either:
+      # Sync client
+      - pattern: httpx.get($URL, ...)
+      - pattern: httpx.post($URL, ...)
+      - pattern: httpx.put($URL, ...)
+      - pattern: httpx.patch($URL, ...)
+      - pattern: httpx.delete($URL, ...)
+      - pattern: httpx.head($URL, ...)
+      - pattern: httpx.options($URL, ...)
+      - pattern: httpx.request($METHOD, $URL, ...)
+      # Client instances
+      - pattern: $CLIENT.get($URL, ...)
+      - pattern: $CLIENT.post($URL, ...)
+      - pattern: $CLIENT.put($URL, ...)
+      - pattern: $CLIENT.patch($URL, ...)
+      - pattern: $CLIENT.delete($URL, ...)
+      - pattern: $CLIENT.head($URL, ...)
+      - pattern: $CLIENT.options($URL, ...)
+      - pattern: $CLIENT.request($METHOD, $URL, ...)
+      - pattern: $CLIENT.send($URL, ...)
+
+  # =============================================================================
+  # AIOHTTP (async HTTP client)
+  # =============================================================================
+  - id: ssrf-aiohttp
+    languages: [python]
+    severity: ERROR
+    message: >
+      User-controlled input is passed as a URL to an `aiohttp` client session
+      method. Validate and allowlist the target before making the request.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: HIGH
+      impact: HIGH
+    pattern-either:
+      - pattern: $SESSION.get($URL, ...)
+      - pattern: $SESSION.post($URL, ...)
+      - pattern: $SESSION.put($URL, ...)
+      - pattern: $SESSION.patch($URL, ...)
+      - pattern: $SESSION.delete($URL, ...)
+      - pattern: $SESSION.head($URL, ...)
+      - pattern: $SESSION.options($URL, ...)
+      - pattern: $SESSION.request($METHOD, $URL, ...)
+      - pattern: aiohttp.ClientSession().get($URL, ...)
+      - pattern: aiohttp.request($METHOD, $URL, ...)
+
+  # =============================================================================
+  # PYCURL
+  # =============================================================================
+  - id: ssrf-pycurl
+    languages: [python]
+    severity: ERROR
+    message: >
+      User-controlled input is passed to `pycurl.setopt(pycurl.URL, ...)`.
+      This can lead to SSRF. Validate and allowlist the target URL.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: MEDIUM
+      impact: HIGH
+    pattern-either:
+      - pattern: $CURL.setopt(pycurl.URL, $URL)
+      - pattern: $CURL.setopt($CURL.URL, $URL)
+
+  # =============================================================================
+  # SOCKET-LEVEL CONNECTIONS
+  # =============================================================================
+  - id: ssrf-socket-connect
+    languages: [python]
+    severity: WARNING
+    message: >
+      User-controlled input may be used in a socket connection. If the host
+      or port is derived from user input, this enables SSRF at the TCP level.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: MEDIUM
+      impact: HIGH
+    pattern-either:
+      - pattern: socket.create_connection(($HOST, ...), ...)
+      - pattern: $SOCK.connect(($HOST, ...))
+
+  # =============================================================================
+  # SSRF via REDIRECT following
+  # =============================================================================
+  - id: ssrf-redirect-bypass
+    languages: [python]
+    severity: WARNING
+    message: >
+      An HTTP request is made with redirect-following enabled (the default).
+      Even if the initial URL is validated, an attacker-controlled server can
+      redirect to internal resources. Consider using `allow_redirects=False`
+      and validating each redirect target, or use `requests.Session` with a
+      custom redirect handler.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: LOW
+      impact: MEDIUM
+    patterns:
+      - pattern: requests.$METHOD($URL, ...)
+      - pattern-not: requests.$METHOD(..., allow_redirects=False, ...)
+
+  # =============================================================================
+  # SSRF via DNS rebinding / TOCTOU — urlparse then fetch
+  # =============================================================================
+  - id: ssrf-toctou-urlparse
+    languages: [python]
+    severity: WARNING
+    message: >
+      The URL is parsed/validated and then fetched in a separate step. This
+      pattern is vulnerable to DNS rebinding (TOCTOU): the hostname may
+      resolve to an allowed IP during validation but to an internal IP at
+      request time. Pin the resolved IP or use a proxy/firewall to block
+      internal ranges.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+        - "CWE-367: Time-of-check Time-of-use (TOCTOU)"
+      confidence: LOW
+      impact: HIGH
+    patterns:
+      - pattern: |
+          $PARSED = urllib.parse.urlparse($URL)
+          ...
+          requests.$METHOD($URL, ...)
+
+  # =============================================================================
+  # HEAD/OPTIONS used as "safe" pre-check then full request
+  # =============================================================================
+  - id: ssrf-head-preflight-bypass
+    languages: [python]
+    severity: WARNING
+    message: >
+      A HEAD or OPTIONS request is used as a pre-flight check before issuing
+      a full request. The server response to HEAD may differ from GET, so
+      the validation can be bypassed. Validate the URL itself, not the response
+      of a pre-flight request.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: LOW
+      impact: MEDIUM
+    pattern-either:
+      - pattern: |
+          $RESP = requests.head($URL, ...)
+          ...
+          requests.get($URL, ...)
+      - pattern: |
+          $RESP = requests.options($URL, ...)
+          ...
+          requests.get($URL, ...)
+
+  # =============================================================================
+  # WEBHOOK / CALLBACK patterns
+  # =============================================================================
+  - id: ssrf-webhook-callback
+    languages: [python]
+    severity: ERROR
+    message: >
+      A user-supplied webhook or callback URL is fetched server-side. This
+      is a classic SSRF vector. Validate the URL scheme (https only),
+      resolve the hostname, and confirm the IP is not in a private range
+      (10.x, 172.16-31.x, 192.168.x, 169.254.169.254, 127.x, ::1, fc00::/7).
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: HIGH
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: requests.$METHOD($WEBHOOK, ...)
+          - pattern: httpx.$METHOD($WEBHOOK, ...)
+      - metavariable-regex:
+          metavariable: $WEBHOOK
+          regex: ".*(webhook|callback|notify|hook|endpoint|target)_?url.*"
+
+  # =============================================================================
+  # IMAGE / FILE FETCHING from user URLs
+  # =============================================================================
+  - id: ssrf-image-file-fetch
+    languages: [python]
+    severity: ERROR
+    message: >
+      A URL for fetching images, files, or remote resources is derived from
+      user input. Validate the URL scheme and resolved IP before fetching.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: MEDIUM
+      impact: HIGH
+    patterns:
+      - pattern-either:
+          - pattern: requests.get($IMAGE_URL, ...)
+          - pattern: urllib.request.urlretrieve($IMAGE_URL, ...)
+          - pattern: urllib.request.urlopen($IMAGE_URL)
+      - metavariable-regex:
+          metavariable: $IMAGE_URL
+          regex: ".*(image|img|file|avatar|icon|logo|photo|media|attachment|resource|asset)_?url.*"
+
+  # =============================================================================
+  # CLOUD METADATA — Hardcoded dangerous targets
+  # =============================================================================
+  - id: ssrf-cloud-metadata-access
+    languages: [python]
+    severity: ERROR
+    message: >
+      A request is made to a cloud metadata endpoint (169.254.169.254 or
+      metadata.google.internal). This is the primary target of SSRF attacks.
+      Ensure this is intentional and not reachable via user-controlled input.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: HIGH
+      impact: CRITICAL
+    pattern-either:
+      - pattern: requests.$METHOD("http://169.254.169.254/...", ...)
+      - pattern: requests.$METHOD("http://metadata.google.internal/...", ...)
+      - pattern: requests.$METHOD(f"...169.254.169.254...", ...)
+      - pattern: urllib.request.urlopen("http://169.254.169.254/...")
+      - pattern: httpx.$METHOD("http://169.254.169.254/...", ...)
+
+  # =============================================================================
+  # INSUFFICIENT VALIDATION — scheme-only or blocklist check
+  # =============================================================================
+  - id: ssrf-insufficient-scheme-check
+    languages: [python]
+    severity: WARNING
+    message: >
+      The URL is validated only by checking the scheme (http/https). This is
+      insufficient to prevent SSRF. An attacker can still target internal hosts.
+      Resolve the hostname to an IP and verify it is not in a private/reserved
+      range.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: MEDIUM
+      impact: HIGH
+    pattern: |
+      $PARSED = urllib.parse.urlparse($URL)
+      ...
+      if $PARSED.scheme in [...]:
+          ...
+          requests.$METHOD($URL, ...)
+
+  # =============================================================================
+  # SSRF via XML External Entity (XXE) leading to SSRF
+  # =============================================================================
+  - id: ssrf-via-xxe
+    languages: [python]
+    severity: ERROR
+    message: >
+      XML parsing with external entity resolution enabled can be abused to
+      perform SSRF. The parser will fetch URLs specified in DOCTYPE or entity
+      declarations. Disable external entity loading.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+        - "CWE-611: Improper Restriction of XML External Entity Reference"
+      confidence: HIGH
+      impact: HIGH
+    pattern-either:
+      - pattern: lxml.etree.parse($SRC)
+      - pattern: lxml.etree.fromstring($DATA)
+      - pattern: xml.etree.ElementTree.parse($SRC)
+      - pattern: |
+          $PARSER = xml.sax.make_parser()
+          ...
+          $PARSER.parse($SRC)
+
+  # =============================================================================
+  # SSRF via PILLOW / IMAGE LIBRARIES
+  # =============================================================================
+  - id: ssrf-pillow-image-open-url
+    languages: [python]
+    severity: WARNING
+    message: >
+      `PIL.Image.open()` is called on a response from a user-controlled URL.
+      Ensure the URL has been validated against an allowlist before fetching.
+    metadata:
+      cwe:
+        - "CWE-918: Server-Side Request Forgery (SSRF)"
+      confidence: MEDIUM
+      impact: MEDIUM
+    pattern-either:
+      - pattern: |
+          $RESP = requests.get($URL, ...)
+          ...
+          Image.open(...)
+      - pattern: |
+          Image.open(urllib.request.urlopen($URL))
+      - pattern: |
+          Image.open(requests.get($URL, ...).content)
