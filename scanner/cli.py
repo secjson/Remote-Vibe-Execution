@@ -31,12 +31,14 @@ def main():
 @click.option("--no-deps", is_flag=True, help="Disable dependency scanning")
 @click.option("--no-ai", is_flag=True, help="Disable AI triage")
 @click.option("--min-severity", type=click.Choice(["critical", "high", "medium", "low", "info"]), default="low")
+@click.option("--ai-min-severity", type=click.Choice(["critical", "high", "medium", "low", "info"]), default="info",
+              help="Minimum severity for findings sent to AI triage (saves API costs)")
 @click.option("--config", "config_file", default="", help="YAML config file path")
 @click.option("--semgrep-rules", multiple=True, default=[], help="Additional Semgrep rule packs")
 def scan(
     target, github_token, ai_provider, ai_key, ai_model,
     output, output_format, no_secrets, no_static, no_deps, no_ai,
-    min_severity, config_file, semgrep_rules,
+    min_severity, ai_min_severity, config_file, semgrep_rules,
 ):
     """Scan a repository for security vulnerabilities.
 
@@ -74,6 +76,7 @@ def scan(
 
     from scanner.config import SeverityLevel
     config.min_severity = SeverityLevel(min_severity)
+    config.ai_min_severity = SeverityLevel(ai_min_severity)
 
     if semgrep_rules:
         config.semgrep_rules.extend(semgrep_rules)

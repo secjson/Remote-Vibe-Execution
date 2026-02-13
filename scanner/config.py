@@ -74,6 +74,7 @@ class ScanConfig:
 
     # Severity thresholds
     min_severity: SeverityLevel = SeverityLevel.LOW
+    ai_min_severity: SeverityLevel = SeverityLevel.INFO
     confidence_threshold: float = 0.5
 
     @classmethod
@@ -84,7 +85,7 @@ class ScanConfig:
         for k, v in (data or {}).items():
             if k == "ai_provider":
                 v = AIProvider(v)
-            elif k == "min_severity":
+            elif k in ("min_severity", "ai_min_severity"):
                 v = SeverityLevel(v)
             if hasattr(config, k):
                 setattr(config, k, v)

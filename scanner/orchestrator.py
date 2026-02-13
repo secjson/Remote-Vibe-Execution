@@ -9,7 +9,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.panel import Panel
 
-from scanner.config import ScanConfig
+from scanner.config import ScanConfig, SeverityLevel
 from scanner.models import ScanReport, RepoMetadata
 from scanner.github_client import ingest_repo
 from scanner.preprocessor import preprocess
@@ -95,14 +95,33 @@ def run_scan(config: ScanConfig) -> ScanReport:
 
         # ── Stage 4: AI Triage ──
         if config.enable_ai_triage and config.ai_provider.value != "none":
-            task = progress.add_task(f"🤖 AI triage ({len(all_findings)} findings)...", total=None)
+            # Pre-filter findings by severity for AI triage
+            ai_threshold = config.ai_min_severity.score
+            ai_triage_findings = [
+                f for f in all_findings
+                if SeverityLevel(f.severity).score >= ai_threshold
+            ]
+            skipped_count = len(all_findings) - len(ai_triage_findings)
+
+            task = progress.add_task(
+                f"🤖 AI triage ({len(ai_triage_findings)} of {len(all_findings)} findings)...",
+                total=None,
+            )
             try:
                 agent = AITriageAgent(config)
-                all_findings = agent.triage_findings(all_findings, repo_path)
+                ai_triage_findings = agent.triage_findings(ai_triage_findings, repo_path)
                 progress.update(task, description="🤖 AI triage complete")
             except Exception as e:
                 report.errors.append(f"AI triage error: {e}")
             progress.remove_task(task)
+
+            # Merge triaged findings back with skipped ones
+            if skipped_count > 0:
+                triaged_ids = {f.id for f in ai_triage_findings}
+                skipped_findings = [f for f in all_findings if f.id not in triaged_ids]
+                all_findings = ai_triage_findings + skipped_findings
+            else:
+                all_findings = ai_triage_findings
 
         # ── Stage 5: Risk Engine ──
         task = progress.add_task("📊 Risk analysis...", total=None)
