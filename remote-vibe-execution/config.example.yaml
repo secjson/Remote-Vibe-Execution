@@ -1,0 +1,81 @@
+# Remote Vibe Execution Configuration
+# Copy this to config.yaml and customize
+
+# Target (set via CLI, but can be defaulted here)
+# repo_url: "https://github.com/owner/repo"
+# repo_path: "/path/to/local/repo"
+
+# GitHub token for private repos and higher API limits
+# github_token: ""  # Better: set GITHUB_TOKEN env var
+
+# Scanner toggles
+enable_secret_scan: true
+enable_static_analysis: true
+enable_dependency_scan: true
+enable_ai_triage: true
+
+# AI Configuration
+# Providers: openai, anthropic, none
+ai_provider: "none"
+# ai_model: "gpt-4o"             # For OpenAI
+# ai_model: "claude-sonnet-4-20250514"  # For Anthropic
+# ai_api_key: ""                  # Better: set AI_API_KEY env var
+
+# File filtering
+exclude_patterns:
+  - "node_modules/"
+  - ".git/"
+  - "__pycache__/"
+  - "*.min.js"
+  - "vendor/"
+  - "dist/"
+  - "build/"
+  - ".venv/"
+  - "venv/"
+  - "*.lock"
+  - "package-lock.json"
+
+include_extensions:
+  - ".py"
+  - ".js"
+  - ".ts"
+  - ".jsx"
+  - ".tsx"
+  - ".java"
+  - ".go"
+  - ".rb"
+  - ".php"
+  - ".cs"
+  - ".c"
+  - ".cpp"
+  - ".rs"
+  - ".sh"
+  - ".yml"
+  - ".yaml"
+  - ".json"
+  - ".xml"
+  - ".tf"
+  - ".sql"
+  - ".html"
+  - ".env"
+
+max_file_size_kb: 500
+chunk_size_lines: 200
+
+# Semgrep rule packs
+semgrep_rules:
+  - "p/security-audit"
+  - "p/secrets"
+  - "p/owasp-top-ten"
+
+custom_rules_dir: "./rules"
+
+# Output
+output_dir: "./output"
+output_format:
+  - "json"
+  - "markdown"
+
+# Thresholds
+min_severity: "low"
+confidence_threshold: 0.5

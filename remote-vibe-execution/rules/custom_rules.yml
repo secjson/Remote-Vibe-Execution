@@ -1,0 +1,34 @@
+rules:
+  - id: hardcoded-database-url
+    patterns:
+      - pattern: |
+          $DB_URL = "...$PROTO://$USER:$PASS@..."
+    message: "Hardcoded database connection string with credentials"
+    languages: [python, javascript, typescript]
+    severity: ERROR
+    metadata:
+      cwe:
+        - "CWE-798: Use of Hard-coded Credentials"
+      category: security
+
+  - id: insecure-cookie
+    patterns:
+      - pattern: |
+          response.set_cookie(..., secure=False, ...)
+    message: "Cookie set without Secure flag"
+    languages: [python]
+    severity: WARNING
+    metadata:
+      cwe:
+        - "CWE-614: Sensitive Cookie in HTTPS Session Without 'Secure' Attribute"
+
+  - id: open-redirect
+    patterns:
+      - pattern: |
+          redirect($REQUEST)
+    message: "Potential open redirect from user input"
+    languages: [python]
+    severity: WARNING
+    metadata:
+      cwe:
+        - "CWE-601: URL Redirection to Untrusted Site"
