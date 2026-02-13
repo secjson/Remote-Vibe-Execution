@@ -78,4 +78,5 @@ output_format:
 
 # Thresholds
 min_severity: "low"
+ai_min_severity: "info"  # Minimum severity for findings sent to AI triage (saves API costs)
 confidence_threshold: 0.5
